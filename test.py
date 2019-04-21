@@ -1,14 +1,7 @@
-def func1():
-    print('hola')
+x = "/trades@pldcsx"
 
-def func2():
-    print('hello')
+commands = x.split('@')[0]
+print(commands)
 
-commands = {
-    'func1':func1,
-    'func2':func2
-}
-commands['func2']()
-
-if ('func1' in commands):
-    print('true')
+commands2 = x.split('@')[0][1:]
+print(commands2)
