@@ -27,7 +27,30 @@ def hello():
     }
     return jsonify(response)
 
-@app.route("/kite_login", methods=["GET"])
+@app.route("/kite/trades", methods=["GET"])
+def retrieve_trades():
+    '''
+    Retrieve the list of all executed trades for the day
+    '''
+    try:
+        pass
+    except:
+        pass
+    return
+
+@app.route("/kite/orders", methods=["GET"])
+def retrieve_orders():
+    '''
+    Retrieve the list of all orders (open and executed) for the day
+    '''
+    try:
+        pass
+    except:
+        pass
+    return
+
+
+@app.route("/kite/login", methods=["GET"])
 def handle_request_token():
     '''
     Updates Kite Connect access tokens using obtained request token
@@ -50,6 +73,32 @@ def handle_request_token():
     
     return jsonify(response)
 
+@app.route("/telegram/algo_trade", methods=["POST"])
+def algo_trader_bot():
+    '''
+    Main bot server for algo trader
+    '''
+    try:
+        message = request.json.get("message")
+        text = message["text"]
+        #chat_id = message["chat"]["id"]
+
+        data = {"text": text.encode("utf8")}
+        data2 = {"message": message}
+        print(data)
+        requests.get(ALGOTRADE_BOT_SEND_URL+str(data))
+        requests.get(ALGOTRADE_BOT_SEND_URL+str(data2))
+
+    except Exception as e:
+        return jsonify({
+            'ERROR!': e
+        })
+
+    return jsonify({
+        "success": message
+    })
+    
+
 @app.route("/signal/<string:encoded_data>", methods=["GET"])
 def get_signal_encoded(encoded_data):
     '''
@@ -65,6 +114,9 @@ def get_signal_encoded(encoded_data):
         telegram_msg = str(trade_signal).replace("'", "").replace(", ", "%0A").replace("{", "").replace("}", "")
         # Send telegram message
         requests.get(SIGNAL_BOT_SEND_URL+telegram_msg)
+        # Check if Auto Trade parameter is enabled
+        if(telegram_msg['autoTrade'] == 1):
+            auto_trade(trade_signal)
 
     except:
         return jsonify({
@@ -77,6 +129,12 @@ def get_signal_encoded(encoded_data):
         'status': True,
         'trade_signal': trade_signal
     })
+
+def auto_trade(trade_signal):
+    '''
+    Places order in zerodha
+    '''
+    return
 
 
 if __name__ == '__main__':
