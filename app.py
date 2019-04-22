@@ -1,35 +1,53 @@
 from flask import Flask, jsonify, request
+from kiteconnect import KiteConnect
+from datetime import datetime
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
 import base64
 import json
 import requests
-import boto3
-import kiteconnect
-from datetime import datetime
-from time import time
-from boto3.dynamodb.conditions import Key, Attr
 
+# Zerodha Constants
+KITE_API_KEY = "8k89pux7hxe58snm"
+KITE_API_SECRET = "24uqvpxbalc9yc8nmnrb0ei4y9crhvke"
 
+# Telegram Constants
+TESTING_GROUP_ID = "-342024797"
+SIGNAL_BOT_TOKEN = "720087545:AAFe4C2JyjB7r3hp2YO53mHfqEzQwKknjoE"
+SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)
+SIGNAL_BOT_SEND_URL = SIGNAL_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
+ALGOTRADE_BOT_TOKEN = "878159613:AAFEF_7UtZgkFbaLhsyP0ddlmT1L2m-MjaA"
+ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN)
+ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
+
+# Flask Server
 app = Flask(__name__)
+# Add Dynamodb resource
 dynamodb = boto3.resource('dynamodb')
+# Kite connect auth token table
 token_table = dynamodb.Table("kite_connect_token")
+# Initialize kite object
+kite = KiteConnect(api_key=KITE_API_KEY)
 
-# AWS Constants
-#KITE_TOKEN_TABLE = "kite_connect_token"
-
-def boto_testing1():
+def update_token_table(_access_token):
     dtime = datetime.now().replace(microsecond=0).isoformat().split('T')
     try:
         response = token_table.put_item(
             Item={
                 'date_stamp': dtime[0],
                 'time_stamp': dtime[1],
-                'access_token': 'jackfrui'
+                'access_token': _access_token
             }
         )
-        print(response)
 
-    except Exception as e:
-        print (e)
+    except Exception as err:
+        return err
+    
+    return response
+
+def boto_testing1():
+    
+    
     
 def boto_testing2():
     dtime = datetime.now().replace(microsecond=0).isoformat().split('T')
@@ -53,18 +71,8 @@ def boto_testing2():
     
 boto_testing2()
 
-# Telegram Constants
-TESTING_GROUP_ID = "-342024797"
-SIGNAL_BOT_TOKEN = "720087545:AAFe4C2JyjB7r3hp2YO53mHfqEzQwKknjoE"
-SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)
-SIGNAL_BOT_SEND_URL = SIGNAL_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
-ALGOTRADE_BOT_TOKEN = "878159613:AAFEF_7UtZgkFbaLhsyP0ddlmT1L2m-MjaA"
-ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN)
-ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
 
-# Zerodha Constants
-KITE_API_KEY = "8k89pux7hxe58snm"
-KITE_API_SECRET = "24uqvpxbalc9yc8nmnrb0ei4y9crhvke"
+
 
 # Custom functions
 def get_kite_orders():
@@ -93,7 +101,7 @@ def send_telegram(url, message):
     requests.get(url+str(message))
     return
 
-def auto_trade(trade_signal):
+def execute_auto_trade(trade_signal):
     '''
     Places order in zerodha
     '''
@@ -165,12 +173,13 @@ def get_signal_encoded(encoded_data):
         # Send telegram
         send_telegram(SIGNAL_BOT_SEND_URL, telegram_msg)
         # Check if Auto Trade parameter is enabled
-        if(telegram_msg['autoTrade'] == 1):
-            auto_trade(trade_signal)
+        auto_trade = telegram_msg['autoTrade']
+        if auto_trade:
+            execute_auto_trade(trade_signal)
 
     except Exception as err:
         return jsonify({
-            'ERROR': err,
+            'ERROR': err
         })
 
     return jsonify({
@@ -186,20 +195,30 @@ def handle_request_token():
     try:
         # Get url parameter request_token
         request_token = request.args.get('request_token')
+        # Get url parameter status
         login_status = request.args.get('status')
-        response = {
-            "request_token": request_token,
-            "login_status": login_status
-        }
+        # Generate access token
+        data = kite.generate_session(request_token, api_secret=KITE_API_SECRET)
+        # Get access token
+        access_token = data["access_token"]
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Add Access token to dynamodb table
+        update_token_table(access_token)
+
+
+
+        
     
-    except:
+    except Exception as err:
         return jsonify({
-            'error': True,
-            'function': "handle_request_token()",
-            'description': "Updates Kite Connect access tokens using obtained request token"
+            'ERROR': err
         })
     
-    return jsonify(response)
+    return jsonify({
+        "request_token": request_token,
+        "login_status": login_status
+    })
 
     
 
