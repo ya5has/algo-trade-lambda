@@ -42,8 +42,6 @@ def get_datetime():
     '''
     return datetime.now(TIMEZONE).replace(microsecond=0).isoformat().split('T')
 
-
-
 def update_token_table(_access_token):
     '''
     Update Token Table with new access token
@@ -60,8 +58,8 @@ def update_token_table(_access_token):
             }
         )
 
-    except Exception as err:
-        return err
+    except:
+        return "Error: Token table update failed"
     
     return response['ResponseMetadata']['HTTPStatusCode']
     
@@ -76,20 +74,13 @@ def get_access_token():
     try:
         response = token_table.query(
             KeyConditionExpression=Key('date_stamp').eq(dtime[0]),
-            #FilterExpression=Key('time_stamp').max(),
             ProjectionExpression="access_token",
             ScanIndexForward = False,
             Limit = 1
         )
-        #if response['Items']:
-        #    print(json.dumps(response['Items']['access_token']))
-        #else:
-        #    print("no access token found for today")
-        print(response)
-        #print("Access Token::"+ response['Items']['access_token'])
 
-    except Exception as err:
-        return err
+    except:
+        return 0
 
     return response['Items'][0]['access_token']
 
@@ -102,23 +93,23 @@ def get_kite_orders():
     try:
         # Get Access token from the DB
         access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
         # Set access token in the kite object
         kite.set_access_token(access_token)
         # Get all orders
         orders = kite.orders()
 
-    except Exception as err:
-        return jsonify({
-            'ERROR': err
-        })
+    except:
+        return "Error: Maybe related to network. Try again"
 
-
-    if orders:
-        return str(orders)
     else:
-        return "No orders today"
-
-
+        if orders:
+            return str(orders)
+        else:
+            return "No orders today"
 
 
 def get_kite_trades():
@@ -128,29 +119,31 @@ def get_kite_trades():
     try:
         # Get Access token from the DB
         access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
         # Set access token in the kite object
         kite.set_access_token(access_token)
         # Get all orders
         trades = kite.trades()
 
-    except Exception as err:
-        return jsonify({
-            'ERROR': err
-        })
+    except:
+        return "Error: Maybe related to network. Try again"
 
-
-    if trades:
-        return str(trades)
-    else:
-        return "No trades today"
+    else: 
+        if trades:
+            return str(trades)
+        else:
+            return "No trades today"
 
 
 def handle_invalid_telegram_command():
     '''
     handles invalid commands given to telegram bot
     '''
-    response = "Inavalid Command! Please try again"
-    return response
+    return "Inavalid Command! Please try again"
+
 
 def send_telegram(url, message):
     '''
@@ -163,6 +156,7 @@ def execute_auto_trade(trade_signal):
     '''
     Places order in zerodha
     '''
+    send_telegram(ALGOTRADE_BOT_SEND_URL, "Autotrade request received")
     return
 
 # Telegram Bot Commands
@@ -174,11 +168,13 @@ ALGOTRADE_COMMANDS = {
 # API Routes
 @app.route('/')
 def hello():
-    response = {
+    '''
+    home route to check lambda is online
+    '''
+    return jsonify({
         "server": "Aws lambda",
         "status": "Working"
-    }
-    return jsonify(response)
+    })
 
 @app.route("/telegram/algo_trade", methods=["POST"])
 def algo_trader_bot():
@@ -190,8 +186,11 @@ def algo_trader_bot():
         message = request.json.get("message")
         # Get the main content of the message
         text = message["text"]
-        # Get the command out of the text (in groups the command includes bot name after '@')
+        # Get the chat_id from which the text was received
+        chat_id = message["chat"]["id"]
+        # Get the command out of the text (in telegram groups the command includes bot name after '@')
         command = text.split('@')[0][1:]
+        
         # Check if it is a valid command
         if command in ALGOTRADE_COMMANDS:
             # Execute the command
@@ -199,16 +198,15 @@ def algo_trader_bot():
         else:
             # Handle invalid command
             response = handle_invalid_telegram_command()
-        # Get the chat_id from which the text was received
-        chat_id = message["chat"]["id"]
+
         # Build a response url for the particular chat_id
         response_url = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+str(chat_id)+"&text="
         # send telegram
         send_telegram(response_url, response)
     
-    except Exception as e:
+    except Exception as err:
         return jsonify({
-            'ERROR!': e
+            'ERROR!': err
         })
 
     return jsonify({
@@ -254,10 +252,8 @@ def handle_request_token():
     try:
         # Get url parameter request_token
         request_token = request.args.get('request_token')
-        # Get url parameter status
-        login_status = request.args.get('status')
         
-        # Generate access token
+        # Generate access session
         data = kite.generate_session(request_token, api_secret=KITE_API_SECRET)
         # Get access token
         access_token = data["access_token"]
@@ -265,9 +261,7 @@ def handle_request_token():
         db_status = update_token_table(access_token)
         # Set access token in the kite object
         kite.set_access_token(access_token)
-        
-
-    
+         
     except Exception as err:
         return jsonify({
             'ERROR': err
@@ -275,7 +269,6 @@ def handle_request_token():
     
     return jsonify({
         "request_token": request_token,
-        "login_status": login_status,
         "access_token": access_token,
         "db_status": db_status
     })
