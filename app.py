@@ -38,9 +38,8 @@ kite = KiteConnect(api_key=KITE_API_KEY)
 
 def get_datetime():
     '''
-    Returns datetime
+    Returns a list which contains date and time
     '''
-    # Get +0530 datetime
     return datetime.now(TIMEZONE).replace(microsecond=0).isoformat().split('T')
 
 
@@ -78,7 +77,7 @@ def get_access_token():
         response = token_table.query(
             KeyConditionExpression=Key('date_stamp').eq(dtime[0]),
             #FilterExpression=Key('time_stamp').max(),
-            #ProjectionExpression="access_token",
+            ProjectionExpression="access_token",
             ScanIndexForward = False,
             Limit = 1
         )
@@ -90,10 +89,9 @@ def get_access_token():
         #print("Access Token::"+ response['Items']['access_token'])
 
     except Exception as err:
-        print (err)
-        return
+        return err
 
-    return response['Items']['access_token']
+    return response['Items'][0]['access_token']
 
 
 # Custom functions
