@@ -32,7 +32,7 @@ app = Flask(__name__)
 # Add Dynamodb resource
 dynamodb = boto3.resource('dynamodb')
 # Kite connect auth token table
-token_table = dynamodb.Table("kite_connect_token")
+token_table = dynamodb.Table("kite-access-token-table")
 # Initialize kite object
 kite = KiteConnect(api_key=KITE_API_KEY)
 
@@ -145,14 +145,14 @@ def handle_invalid_telegram_command():
     return "Inavalid Command! Please try again"
 
 
-def send_telegram(url, message):
+def send_telegram(_url, _message):
     '''
     Sends telegram given url and message
     '''
-    requests.get(url+str(message))
+    requests.get(_url+str(_message))
     return
 
-def execute_auto_trade(trade_signal):
+def execute_auto_trade(_trade_signal):
     '''
     Places order in zerodha
     '''
