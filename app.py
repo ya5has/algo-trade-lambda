@@ -1,11 +1,15 @@
 from flask import Flask, jsonify, request
 from kiteconnect import KiteConnect
 from datetime import datetime
-import boto3
 from boto3.dynamodb.conditions import Key, Attr
+import boto3
 import base64
 import json
+import pytz
 import requests
+import logging
+
+#logging.basicConfig(level=logging.DEBUG)
 
 # Zerodha Constants
 KITE_API_KEY = "8k89pux7hxe58snm"
@@ -20,6 +24,9 @@ ALGOTRADE_BOT_TOKEN = "878159613:AAFEF_7UtZgkFbaLhsyP0ddlmT1L2m-MjaA"
 ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN)
 ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
 
+# App Constants
+TIMEZONE = pytz.timezone("Asia/Kolkata")
+
 # Flask Server
 app = Flask(__name__)
 # Add Dynamodb resource
@@ -29,12 +36,21 @@ token_table = dynamodb.Table("kite_connect_token")
 # Initialize kite object
 kite = KiteConnect(api_key=KITE_API_KEY)
 
+def get_datetime():
+    '''
+    Returns datetime
+    '''
+    # Get +0530 datetime
+    return datetime.now(TIMEZONE).replace(microsecond=0).isoformat().split('T')
+
+
+
 def update_token_table(_access_token):
     '''
     Update Token Table with new access token
     '''
     # Get current datetime in isoformat
-    dtime = datetime.now().replace(microsecond=0).isoformat().split('T')
+    dtime = get_datetime()
 
     try:
         response = token_table.put_item(
@@ -48,31 +64,36 @@ def update_token_table(_access_token):
     except Exception as err:
         return err
     
-    return response
+    return response['ResponseMetadata']['HTTPStatusCode']
     
     
-def boto_testing2():
+def get_access_token():
+    '''
+    Retrieve Access Token from Token Table
+    '''
     # Get current datetime in isoformat
-    dtime = datetime.now().replace(microsecond=0).isoformat().split('T')
+    dtime = get_datetime()
 
     try:
         response = token_table.query(
             KeyConditionExpression=Key('date_stamp').eq(dtime[0]),
             #FilterExpression=Key('time_stamp').max(),
             #ProjectionExpression="access_token",
-            
             ScanIndexForward = False,
             Limit = 1
         )
-        if response['Items']:
-            print(json.dumps(response['Items']['access_token']))
-        else:
-            print("no access token found for today")
+        #if response['Items']:
+        #    print(json.dumps(response['Items']['access_token']))
+        #else:
+        #    print("no access token found for today")
+        print(response)
+        #print("Access Token::"+ response['Items']['access_token'])
 
-    except Exception as e:
-        print (e)
+    except Exception as err:
+        print (err)
+        return
 
-    return
+    return response['Items']['access_token']
 
 
 # Custom functions
@@ -80,13 +101,51 @@ def get_kite_orders():
     '''
     Returns the list of all orders (open and executed) for the day
     '''
-    return "getting_kite_orders (function not implemented yet)"
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get all orders
+        orders = kite.orders()
+
+    except Exception as err:
+        return jsonify({
+            'ERROR': err
+        })
+
+
+    if orders:
+        return str(orders)
+    else:
+        return "No orders today"
+
+
+
 
 def get_kite_trades():
     '''
     Returns the list of all executed trades for the day
     '''
-    return "getting_kite_trades (function not implemented yet)"
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get all orders
+        trades = kite.trades()
+
+    except Exception as err:
+        return jsonify({
+            'ERROR': err
+        })
+
+
+    if trades:
+        return str(trades)
+    else:
+        return "No trades today"
+
 
 def handle_invalid_telegram_command():
     '''
@@ -108,7 +167,7 @@ def execute_auto_trade(trade_signal):
     '''
     return
 
-# Telegram Commands
+# Telegram Bot Commands
 ALGOTRADE_COMMANDS = {
     'orders': get_kite_orders,
     'trades': get_kite_trades
@@ -155,7 +214,8 @@ def algo_trader_bot():
         })
 
     return jsonify({
-        "success": "Bot responded!"
+        "success": "Bot responded!",
+        "response": response
     })
 
 @app.route("/signal/<string:encoded_data>", methods=["GET"])
@@ -191,21 +251,23 @@ def get_signal_encoded(encoded_data):
 @app.route("/kite/login", methods=["GET"])
 def handle_request_token():
     '''
-    Updates Kite Connect access tokens using obtained request token
+    Updates Kite Connect access token using obtained request token
     '''
     try:
         # Get url parameter request_token
         request_token = request.args.get('request_token')
         # Get url parameter status
         login_status = request.args.get('status')
+        
         # Generate access token
         data = kite.generate_session(request_token, api_secret=KITE_API_SECRET)
         # Get access token
         access_token = data["access_token"]
+        # Add Access token to dynamodb table
+        db_status = update_token_table(access_token)
         # Set access token in the kite object
         kite.set_access_token(access_token)
-        # Add Access token to dynamodb table
-        db_response = update_token_table(access_token)
+        
 
     
     except Exception as err:
@@ -216,7 +278,8 @@ def handle_request_token():
     return jsonify({
         "request_token": request_token,
         "login_status": login_status,
-        "db_response": db_response
+        "access_token": access_token,
+        "db_status": db_status
     })
 
 
