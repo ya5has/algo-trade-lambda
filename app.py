@@ -103,7 +103,7 @@ def get_kite_orders():
         orders = kite.orders()
 
     except:
-        return "Error: Maybe related to network. Try again"
+        return "Error: Invalid access token or maybe related to network. Try again"
 
     else:
         if orders:
@@ -129,7 +129,7 @@ def get_kite_trades():
         trades = kite.trades()
 
     except:
-        return "Error: Maybe related to network. Try again"
+        return "Error: Invalid access token or maybe related to network. Try again"
 
     else: 
         if trades:
@@ -156,8 +156,28 @@ def execute_auto_trade(_trade_signal):
     '''
     Places order in zerodha
     '''
+    print("Autotrade request received")
     send_telegram(ALGOTRADE_BOT_SEND_URL, "Autotrade request received")
-    return
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get all orders
+        orders = kite.orders()
+
+    except:
+        return "Error: Invalid access token or maybe related to network. Try again"
+
+    else:
+        if orders:
+            return str(orders)
+        else:
+            return "No orders today"
 
 # Telegram Bot Commands
 ALGOTRADE_COMMANDS = {
@@ -230,7 +250,7 @@ def get_signal_encoded(encoded_data):
         # Send telegram
         send_telegram(SIGNAL_BOT_SEND_URL, telegram_msg)
         # Check if Auto Trade parameter is enabled
-        auto_trade = telegram_msg['autoTrade']
+        auto_trade = trade_signal['autoTrade']
         if auto_trade:
             execute_auto_trade(trade_signal)
 
@@ -276,3 +296,15 @@ def handle_request_token():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+"""
+def read_table_item(table_name, pk_name, pk_value):
+    '''
+    Return item read by primary key.
+    '''
+    table = dynamodb_resource.Table(table_name)
+    response = table.get_item(Key={pk_name: pk_value})
+
+    return response
+"""
