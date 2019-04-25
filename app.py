@@ -9,7 +9,7 @@ import pytz
 import requests
 import logging
 
-#logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
 
 # Zerodha Constants
 KITE_API_KEY = "8k89pux7hxe58snm"
@@ -17,7 +17,7 @@ KITE_API_SECRET = "24uqvpxbalc9yc8nmnrb0ei4y9crhvke"
 
 # Telegram Constants
 TESTING_GROUP_ID = "-342024797"
-SIGNAL_BOT_TOKEN = "k720087545:AAFe4C2JyjB7r3hp2YO53mHfqEzQwKknjoE"
+SIGNAL_BOT_TOKEN = "720087545:AAFe4C2JyjB7r3hp2YO53mHfqEzQwKknjoE"
 SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)
 SIGNAL_BOT_SEND_URL = SIGNAL_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
 ALGOTRADE_BOT_TOKEN = "878159613:AAFEF_7UtZgkFbaLhsyP0ddlmT1L2m-MjaA"
@@ -25,7 +25,7 @@ ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN)
 ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
 
 # App Constants
-TIMEZONE = pytz.timezone("Asia/Kolkata")
+IST = pytz.timezone("Asia/Kolkata")
 
 # Flask Server
 app = Flask(__name__)
@@ -36,24 +36,23 @@ token_table = dynamodb.Table("kite-access-token-table")
 # Initialize kite object
 kite = KiteConnect(api_key=KITE_API_KEY)
 
-def get_datetime():
+def get_date():
     '''
-    Returns a list which contains date and time
+    Returns today's date in isoformat
     '''
-    return datetime.now(TIMEZONE).replace(microsecond=0).isoformat().split('T')
+    return datetime.now(IST).strftime('%Y-%m-%d')
 
 def update_token_table(_access_token):
     '''
-    Update Token Table with new access token
+    Update Token Table with new access tokens
     '''
-    # Get current datetime in isoformat
-    dtime = get_datetime()
+    # Get current date
+    date = get_date()
 
     try:
         response = token_table.put_item(
             Item = {
-                'date_stamp': dtime[0],
-                'time_stamp': dtime[1],
+                'date_stamp': date,
                 'access_token': _access_token
             }
         )
@@ -61,28 +60,31 @@ def update_token_table(_access_token):
     except:
         return "Error: Token table update failed"
     
-    return response['ResponseMetadata']['HTTPStatusCode']
+    return "Token table update success"
     
     
 def get_access_token():
     '''
     Retrieve Access Token from Token Table
     '''
-    # Get current datetime in isoformat
-    dtime = get_datetime()
+    # Get current date in isoformat
+    date = get_date()
 
     try:
-        response = token_table.query(
-            KeyConditionExpression=Key('date_stamp').eq(dtime[0]),
-            ProjectionExpression="access_token",
-            ScanIndexForward = False,
-            Limit = 1
+        response = token_table.get_item(
+            Key={
+                "date_stamp": date
+            }
         )
+
+        # Chech if access token is retrieved
+        if 'Item' not in response:
+            return 0
 
     except:
         return 0
 
-    return response['Items'][0]['access_token']
+    return response['Item']['access_token']
 
 
 # Custom functions
@@ -152,6 +154,14 @@ def send_telegram(_url, _message):
     requests.get(_url+str(_message))
     return
 
+def get_bo_trade_details(_trade_signal):
+    price = float(_trade_signal['price'])
+    #target = round((_trade_signal['target'] * 100 / price), 1)
+    #stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
+    target = round((float(_trade_signal['target']) - price), 1)
+    stoploss = round((price - float(_trade_signal['stoploss'])), 1)
+    return price, target, stoploss
+
 def execute_auto_trade(_trade_signal):
     '''
     Places order in zerodha
@@ -163,21 +173,41 @@ def execute_auto_trade(_trade_signal):
         access_token = get_access_token()
         # Check if the query is successful
         if not access_token:
-            return "Error: Getting access token failed"
+            send_telegram(ALGOTRADE_BOT_SEND_URL, "Autotrade error: Getting access token failed")
+            return
 
         # Set access token in the kite object
         kite.set_access_token(access_token)
-        # Get all orders
-        orders = kite.orders()
+
+        # Change SHORT to SELL
+        if _trade_signal['call'] is 'short':
+            _trade_signal['call'] = 'sell'
+
+        price, target, stoploss = get_bo_trade_details(_trade_signal)
+        
+        print(price, target, stoploss)
+        order_id = kite.place_order(
+            variety=kite.VARIETY_BO,
+            product=kite.PRODUCT_MIS,
+            order_type=kite.ORDER_TYPE_LIMIT,
+            exchange=kite.EXCHANGE_NSE,
+            
+            transaction_type=_trade_signal['call'],
+            tradingsymbol=_trade_signal['stock'],
+            quantity=int(_trade_signal['quantity']),
+            price= price,
+            squareoff = target,
+            stoploss= stoploss
+        )
+
+        logging.info("Order placed. ID is: {}".format(order_id))
 
     except:
         return "Error: Invalid access token or maybe related to network. Try again"
 
     else:
-        if orders:
-            return str(orders)
-        else:
-            return "No orders today"
+        pass
+
 
 # Telegram Bot Commands
 ALGOTRADE_COMMANDS = {
@@ -250,7 +280,7 @@ def get_signal_encoded(encoded_data):
         # Send telegram
         send_telegram(SIGNAL_BOT_SEND_URL, telegram_msg)
         # Check if Auto Trade parameter is enabled
-        auto_trade = trade_signal['autoTrade']
+        auto_trade = trade_signal['autotrade']
         if auto_trade:
             execute_auto_trade(trade_signal)
 
