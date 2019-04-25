@@ -37,7 +37,6 @@ if 'Item' not in response:
   print('empty')
 
 
-
 '''
 def update_token_table(_access_token):
     """

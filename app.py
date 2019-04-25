@@ -158,9 +158,9 @@ def get_bo_trade_details(_trade_signal):
     price = float(_trade_signal['price'])
     #target = round((_trade_signal['target'] * 100 / price), 1)
     #stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
-    target = round((float(_trade_signal['target']) - price), 1)
+    squareoff = round((float(_trade_signal['target']) - price), 1)
     stoploss = round((price - float(_trade_signal['stoploss'])), 1)
-    return price, target, stoploss
+    return price, squareoff, stoploss
 
 def execute_auto_trade(_trade_signal):
     '''
@@ -173,8 +173,7 @@ def execute_auto_trade(_trade_signal):
         access_token = get_access_token()
         # Check if the query is successful
         if not access_token:
-            send_telegram(ALGOTRADE_BOT_SEND_URL, "Autotrade error: Getting access token failed")
-            return
+            return "Autotrade error: Getting access token failed"
 
         # Set access token in the kite object
         kite.set_access_token(access_token)
@@ -183,30 +182,36 @@ def execute_auto_trade(_trade_signal):
         if _trade_signal['call'] is 'short':
             _trade_signal['call'] = 'sell'
 
-        price, target, stoploss = get_bo_trade_details(_trade_signal)
+        price, squareoff, stoploss = get_bo_trade_details(_trade_signal)
+    
+    except:
+        return "Error: Invalid access token or maybe related to network. Try again"
         
-        print(price, target, stoploss)
-        order_id = kite.place_order(
+
+        try:
+            order_id = kite.place_order(
             variety=kite.VARIETY_BO,
             product=kite.PRODUCT_MIS,
             order_type=kite.ORDER_TYPE_LIMIT,
             exchange=kite.EXCHANGE_NSE,
-            
-            transaction_type=_trade_signal['call'],
+            transaction_type=_trade_signal['call'].upper(),
             tradingsymbol=_trade_signal['stock'],
             quantity=int(_trade_signal['quantity']),
-            price= price,
-            squareoff = target,
-            stoploss= stoploss
+            price=price,
+            squareoff=squareoff,
+            stoploss=stoploss
         )
+        
+        except Exception as e:
+            logging.info("Order placement failed: {}".format(e))
+
 
         logging.info("Order placed. ID is: {}".format(order_id))
 
-    except:
-        return "Error: Invalid access token or maybe related to network. Try again"
+
 
     else:
-        pass
+        return "Autotrade executed successfully"+str(order_id)
 
 
 # Telegram Bot Commands
@@ -282,7 +287,8 @@ def get_signal_encoded(encoded_data):
         # Check if Auto Trade parameter is enabled
         auto_trade = trade_signal['autotrade']
         if auto_trade:
-            execute_auto_trade(trade_signal)
+            respose = execute_auto_trade(trade_signal)
+            send_telegram(ALGOTRADE_BOT_SEND_URL, respose)
 
     except Exception as err:
         return jsonify({
