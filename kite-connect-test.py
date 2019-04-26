@@ -10,30 +10,32 @@ ACCESS_TOKEN = "cvbSFGOIOeltJs36L6QqJCQ8WXy00fPJ"
 
 kite = KiteConnect(api_key=KITE_API_KEY)
 
-#data = kite.generate_session(REQUEST_TOKEN, api_secret=KITE_API_SECRET)
-#print(data["access_token"])
+# data = kite.generate_session(REQUEST_TOKEN, api_secret=KITE_API_SECRET)
+# print(data["access_token"])
 
 kite.set_access_token(ACCESS_TOKEN)
 
+
 def get_bo_trade_details(_trade_signal):
     price = float(_trade_signal['price'])
-    #target = round((_trade_signal['target'] * 100 / price), 1)
-    #stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
+    # target = round((_trade_signal['target'] * 100 / price), 1)
+    # stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
     target = round((float(_trade_signal['target']) - price), 1)
     stoploss = round((price - float(_trade_signal['stoploss'])), 1)
     return price, target, stoploss
 
+
 _trade_signal = {
     "time": "2019-04-30 10:45:00",
-	"strategy": "gt_InD_15min_reliance",
-	"interval": "15min",
-	"stock": "TATAELXSI",
-	"call": "buy",
-	"quantity": "10",
-	"price": "932.05",
-	"target": "941.3705",
-	"stoploss": "922.7295",
-	"autotrade": 1
+    "strategy": "gt_InD_15min_reliance",
+    "interval": "15min",
+    "stock": "TATAELXSI",
+    "call": "buy",
+    "quantity": "10",
+    "price": "932.05",
+    "target": "941.3705",
+    "stoploss": "922.7295",
+    "autotrade": 1
 }
 
 price, target, stoploss = get_bo_trade_details(_trade_signal)
@@ -74,4 +76,4 @@ if orders:
 else:
     print("No trades today")
 """
-#https://api.kite.trade/orders"
+# https://api.kite.trade/orders"

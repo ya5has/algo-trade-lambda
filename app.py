@@ -1,7 +1,6 @@
 from flask import Flask, jsonify, request
 from kiteconnect import KiteConnect
 from datetime import datetime
-from boto3.dynamodb.conditions import Key, Attr
 import boto3
 import base64
 import json
@@ -19,10 +18,13 @@ KITE_API_SECRET = "24uqvpxbalc9yc8nmnrb0ei4y9crhvke"
 TESTING_GROUP_ID = "-342024797"
 SIGNAL_BOT_TOKEN = "720087545:AAFe4C2JyjB7r3hp2YO53mHfqEzQwKknjoE"
 SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)
-SIGNAL_BOT_SEND_URL = SIGNAL_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
+SIGNAL_BOT_SEND_URL = SIGNAL_BOT_URL + \
+    "/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
 ALGOTRADE_BOT_TOKEN = "878159613:AAFEF_7UtZgkFbaLhsyP0ddlmT1L2m-MjaA"
-ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN)
-ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+TESTING_GROUP_ID+"&text="
+ALGOTRADE_BOT_URL = "https://api.telegram.org/bot{}".format(
+    ALGOTRADE_BOT_TOKEN)
+ALGOTRADE_BOT_SEND_URL = ALGOTRADE_BOT_URL + \
+    "/sendMessage?chat_id="+TESTING_GROUP_ID+"&parse_mode=markdown&text="
 
 # App Constants
 IST = pytz.timezone("Asia/Kolkata")
@@ -36,11 +38,13 @@ token_table = dynamodb.Table("kite-access-token-table")
 # Initialize kite object
 kite = KiteConnect(api_key=KITE_API_KEY)
 
+
 def get_date():
     '''
     Returns today's date in isoformat
     '''
     return datetime.now(IST).strftime('%Y-%m-%d')
+
 
 def update_token_table(_access_token):
     '''
@@ -50,19 +54,19 @@ def update_token_table(_access_token):
     date = get_date()
 
     try:
-        response = token_table.put_item(
-            Item = {
+        token_table.put_item(
+            Item={
                 'date_stamp': date,
                 'access_token': _access_token
             }
         )
 
-    except:
+    except Exception:
         return "Error: Token table update failed"
-    
+
     return "Token table update success"
-    
-    
+
+
 def get_access_token():
     '''
     Retrieve Access Token from Token Table
@@ -81,7 +85,7 @@ def get_access_token():
         if 'Item' not in response:
             return 0
 
-    except:
+    except Exception:
         return 0
 
     return response['Item']['access_token']
@@ -104,8 +108,8 @@ def get_kite_orders():
         # Get all orders
         orders = kite.orders()
 
-    except:
-        return "Error: Invalid access token or maybe related to network. Try again"
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
 
     else:
         if orders:
@@ -130,14 +134,14 @@ def get_kite_trades():
         # Get all orders
         trades = kite.trades()
 
-    except:
-        return "Error: Invalid access token or maybe related to network. Try again"
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
 
-    else: 
+    else:
         if trades:
             return str(trades)
         else:
-            return "No trades today"
+            return "*No trades today*"
 
 
 def handle_invalid_telegram_command():
@@ -154,13 +158,15 @@ def send_telegram(_url, _message):
     requests.get(_url+str(_message))
     return
 
+
 def get_bo_trade_details(_trade_signal):
     price = float(_trade_signal['price'])
-    #target = round((_trade_signal['target'] * 100 / price), 1)
-    #stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
+    # target = round((_trade_signal['target'] * 100 / price), 1)
+    # stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
     squareoff = round((float(_trade_signal['target']) - price), 1)
     stoploss = round((price - float(_trade_signal['stoploss'])), 1)
     return price, squareoff, stoploss
+
 
 def execute_auto_trade(_trade_signal):
     '''
@@ -179,17 +185,16 @@ def execute_auto_trade(_trade_signal):
         kite.set_access_token(access_token)
 
         # Change SHORT to SELL
-        if _trade_signal['call'] is 'short':
+        if _trade_signal['call'] == 'short':
             _trade_signal['call'] = 'sell'
 
         price, squareoff, stoploss = get_bo_trade_details(_trade_signal)
-    
-    except:
-        return "Error: Invalid access token or maybe related to network. Try again"
-        
 
-        try:
-            order_id = kite.place_order(
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
+
+    try:
+        order_id = kite.place_order(
             variety=kite.VARIETY_BO,
             product=kite.PRODUCT_MIS,
             order_type=kite.ORDER_TYPE_LIMIT,
@@ -201,17 +206,15 @@ def execute_auto_trade(_trade_signal):
             squareoff=squareoff,
             stoploss=stoploss
         )
-        
-        except Exception as e:
-            logging.info("Order placement failed: {}".format(e))
 
+        if not order_id:
+            return "*Error: Empty order id*%0ACheck trade signal"
 
-        logging.info("Order placed. ID is: {}".format(order_id))
-
-
+    except Exception as e:
+        return "*Error: Order placement failed*%0A"+str(e)
 
     else:
-        return "Autotrade executed successfully"+str(order_id)
+        return "*Autotrade placed*%0AOrder ID: "+str(order_id)
 
 
 # Telegram Bot Commands
@@ -231,6 +234,7 @@ def hello():
         "status": "Working"
     })
 
+
 @app.route("/telegram/algo_trade", methods=["POST"])
 def algo_trader_bot():
     '''
@@ -243,9 +247,10 @@ def algo_trader_bot():
         text = message["text"]
         # Get the chat_id from which the text was received
         chat_id = message["chat"]["id"]
-        # Get the command out of the text (in telegram groups the command includes bot name after '@')
+        # Get the command out of the text
+        # In telegram groups the command includes bot name after '@'
         command = text.split('@')[0][1:]
-        
+
         # Check if it is a valid command
         if command in ALGOTRADE_COMMANDS:
             # Execute the command
@@ -255,10 +260,11 @@ def algo_trader_bot():
             response = handle_invalid_telegram_command()
 
         # Build a response url for the particular chat_id
-        response_url = ALGOTRADE_BOT_URL+"/sendMessage?chat_id="+str(chat_id)+"&text="
+        response_url = ALGOTRADE_BOT_URL + \
+            "/sendMessage?chat_id="+str(chat_id)+"&text="
         # send telegram
         send_telegram(response_url, response)
-    
+
     except Exception as err:
         return jsonify({
             'ERROR!': err
@@ -269,10 +275,11 @@ def algo_trader_bot():
         "response": response
     })
 
+
 @app.route("/signal/<string:encoded_data>", methods=["GET"])
 def get_signal_encoded(encoded_data):
     '''
-    handles encoded signals from amibroker 
+    handles encoded signals from amibroker
     and sends telegram notification
     '''
     try:
@@ -281,7 +288,8 @@ def get_signal_encoded(encoded_data):
         # Convert to python dictionary
         trade_signal = json.loads(decoded_data)
         # Construct telegram message from trade signal
-        telegram_msg = str(trade_signal).replace("'", "").replace(", ", "%0A").replace("{", "").replace("}", "")
+        telegram_msg = str(trade_signal).replace("'", "").replace(
+            ", ", "%0A").replace("{", "").replace("}", "")
         # Send telegram
         send_telegram(SIGNAL_BOT_SEND_URL, telegram_msg)
         # Check if Auto Trade parameter is enabled
@@ -300,6 +308,7 @@ def get_signal_encoded(encoded_data):
         'trade_signal': trade_signal
     })
 
+
 @app.route("/kite/login", methods=["GET"])
 def handle_request_token():
     '''
@@ -308,7 +317,7 @@ def handle_request_token():
     try:
         # Get url parameter request_token
         request_token = request.args.get('request_token')
-        
+
         # Generate access session
         data = kite.generate_session(request_token, api_secret=KITE_API_SECRET)
         # Get access token
@@ -317,12 +326,12 @@ def handle_request_token():
         db_status = update_token_table(access_token)
         # Set access token in the kite object
         kite.set_access_token(access_token)
-         
+
     except Exception as err:
         return jsonify({
             'ERROR': err
         })
-    
+
     return jsonify({
         "request_token": request_token,
         "access_token": access_token,
