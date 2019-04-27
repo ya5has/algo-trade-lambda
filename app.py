@@ -127,7 +127,14 @@ def get_bo_trade_details(_trade_signal):
     # stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
     squareoff = round((float(_trade_signal["target"]) - price), 1)
     stoploss = round((price - float(_trade_signal["stoploss"])), 1)
-    return price, squareoff, stoploss
+
+    # Check if it's a BUY call
+    if _trade_signal["call"] == "buy":
+        # Buy call: return as it is
+        return price, squareoff, stoploss
+    else:
+        # Sell call: convert to positive values
+        return price, squareoff*-1, stoploss*-1
 
 
 def execute_auto_trade(_trade_signal):
