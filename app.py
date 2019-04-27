@@ -134,7 +134,7 @@ def get_bo_trade_details(_trade_signal):
         return price, squareoff, stoploss
     else:
         # Sell call: convert to positive values
-        return price, squareoff*-1, stoploss*-1
+        return price, squareoff * -1, stoploss * -1
 
 
 def execute_auto_trade(_trade_signal):
@@ -354,6 +354,28 @@ def get_signal_encoded(encoded_data):
         return jsonify({"ERROR": str(err)})
 
     return jsonify({"status": True, "trade_signal": trade_signal})
+
+
+@app.route("/kite/orders", methods=["POST"])
+def handle_order_updates():
+    """
+    Receives postback updates from kite. Send updates to telegram
+    """
+    try:
+        # Capture message from post api call from kite
+        message = request.get_json()
+        send_telegram(
+            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
+            "message:" + str(message),
+        )
+
+    except Exception as err:
+        send_telegram(
+            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID), str(err)
+        )
+        return jsonify({"ERROR!": str(err)})
+
+    return jsonify({"success": "postback", "response": "will work"})
 
 
 @app.route("/kite/login", methods=["GET"])
