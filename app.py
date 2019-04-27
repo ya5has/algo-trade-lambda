@@ -110,6 +110,18 @@ def get_bot_send_url(_bot, _chat_id, _markdown=False):
         )
 
 
+def format_telegram(_message):
+    """
+    formats json to readable telegram message
+    """
+    return (
+        _message.replace(", '", "%0A'")
+        .replace("{", "")
+        .replace("}", "")
+        .replace("'", "")
+    )
+
+
 def send_telegram(_url, _message):
     """
     Sends telegram given url and message
@@ -214,11 +226,9 @@ def get_kite_orders(_chat_id):
             for order in orders[-3:]:
                 send_telegram(
                     get_bot_send_url("ALGOTRADE", _chat_id),
-                    str({key: order[key] for key in REQUIRED_KEYS})
-                    .replace(", '", "%0A'")
-                    .replace("{", "")
-                    .replace("}", "")
-                    .replace("'", ""),
+                    format_telegram(
+                        str({key: order[key] for key in REQUIRED_KEYS})
+                    ),
                 )
             return 0
         else:
@@ -251,11 +261,9 @@ def get_kite_trades(_chat_id):
             for trade in trades[-3:]:
                 send_telegram(
                     get_bot_send_url("ALGOTRADE", _chat_id),
-                    str({key: trade[key] for key in REQUIRED_KEYS})
-                    .replace(", '", "%0A'")
-                    .replace("{", "")
-                    .replace("}", "")
-                    .replace("'", ""),
+                    format_telegram(
+                        str({key: trade[key] for key in REQUIRED_KEYS})
+                    ),
                 )
             return 0
         else:
@@ -326,18 +334,11 @@ def get_signal_encoded(encoded_data):
         decoded_data = base64.b64decode(encoded_data).decode("utf-8")
         # Convert to python dictionary
         trade_signal = json.loads(decoded_data)
-        # Construct telegram message from trade signal
-        telegram_msg = (
-            str(trade_signal)
-            .replace("'", "")
-            .replace(", ", "%0A")
-            .replace("{", "")
-            .replace("}", "")
-        )
 
         # Send telegram
         send_telegram(
-            get_bot_send_url("SIGNAL", TESTING_GROUP_ID), telegram_msg
+            get_bot_send_url("SIGNAL", TESTING_GROUP_ID),
+            format_telegram(str(trade_signal)),
         )
 
         # Check if Auto Trade parameter is enabled
