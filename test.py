@@ -4,7 +4,10 @@ stoploss = float("407.626")
 squareoff = round((target - price), 1)
 stoploss = round((price - stoploss), 1)
 
-print(squareoff, stoploss)
+data = "trades"
+
+print(data.split("@")[0][1:])
+
 
 """
 SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)

@@ -4,7 +4,7 @@ from kiteconnect import KiteTicker
 logging.basicConfig(level=logging.DEBUG)
 
 KITE_API_KEY = "8k89pux7hxe58snm"
-KITE_ACCESS_TOKEN = "aCs3Ba0oiVOAsWnPW361K1yYjJLG1iuA"
+KITE_ACCESS_TOKEN = "GEE4u6SKUWbX3nEEv6TIACgxV7MRG8eB"
 # Initialise
 kws = KiteTicker(KITE_API_KEY, KITE_ACCESS_TOKEN)
 
@@ -26,15 +26,15 @@ def on_close(ws, code, reason):
     ws.stop()
 
 
-def order_update(response):
+def on_order_update(ws, data):
     print("successsssssssssssssssssssssssss----------------")
-    print(response)
+    print(data)
 
 
 # Assign the callbacks.
 kws.on_ticks = on_ticks
 kws.on_connect = on_connect
 kws.on_close = on_close
-kws.order_update = order_update
+kws.order_update = on_order_update
 
 kws.connect()

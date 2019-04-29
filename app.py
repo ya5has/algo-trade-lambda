@@ -1,14 +1,16 @@
 from flask import Flask, jsonify, request
 from kiteconnect import KiteConnect
 from datetime import datetime
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import boto3
 import base64
 import json
 import pytz
 import requests
-import logging
 
-logging.basicConfig(level=logging.DEBUG)
+# import logging
+
+# logging.basicConfig(level=logging.DEBUG)
 
 # Zerodha Constants
 KITE_API_KEY = "8k89pux7hxe58snm"
@@ -22,6 +24,7 @@ BASE_URL = {
     "SIGNAL": "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN),
     "ALGOTRADE": "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN),
 }
+ALGOBOT = Bot(ALGOTRADE_BOT_TOKEN)
 
 # App Constants
 IST = pytz.timezone("Asia/Kolkata")
@@ -151,7 +154,11 @@ def get_bo_trade_details(_trade_signal):
 
 def execute_auto_trade(_trade_signal):
     """
-    Places order in zerodha
+    Places order on zerodha
+    Args:
+        _trade_signal: type Dictionary
+    Returns:
+        autotrade status: type String
     """
     send_telegram(
         get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
@@ -200,7 +207,7 @@ def execute_auto_trade(_trade_signal):
         return "*Autotrade placed*%0AOrder ID: " + str(order_id)
 
 
-def get_kite_orders(_chat_id):
+def telegram_kite_orders(_chat_id):
     """
     Returns the list of all orders (open and executed) for the day
     """
@@ -235,7 +242,7 @@ def get_kite_orders(_chat_id):
             return "No orders today"
 
 
-def get_kite_trades(_chat_id):
+def telegram_kite_trades(_chat_id):
     """
     Returns the list of all executed trades for the day
     """
@@ -270,7 +277,22 @@ def get_kite_trades(_chat_id):
             return "No trades today"
 
 
-def handle_invalid_telegram_command():
+def telegram_test_command(_chat_id):
+
+    keyboard = [
+        [
+            InlineKeyboardButton("Trade", callback_data="/trades"),
+            InlineKeyboardButton("Order", callback_data="/orders"),
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    ALGOBOT.send_message(
+        chat_id=_chat_id, text="is it working?", reply_markup=reply_markup
+    )
+    return
+
+
+def telegram_invalid_command():
     """
     handles invalid commands given to telegram bot
     """
@@ -278,7 +300,11 @@ def handle_invalid_telegram_command():
 
 
 # Telegram Bot Commands
-ALGOTRADE_COMMANDS = {"orders": get_kite_orders, "trades": get_kite_trades}
+ALGOTRADE_COMMANDS = {
+    "orders": telegram_kite_orders,
+    "trades": telegram_kite_trades,
+    "test": telegram_test_command,
+}
 
 # API Routes
 @app.route("/")
@@ -295,15 +321,31 @@ def algo_trader_bot():
     Main bot server for algo trader
     """
     try:
-        # Capture message from post api call from telegram
-        message = request.json.get("message")
-        # Get the main content of the message
-        text = message["text"]
+        # Capture update from post api call from telegram
+        update = request.get_json()
+
+        # Check if its a callback update
+        if "callback_query" in update:
+            # Get the message property
+            message = update["callback_query"]["message"]
+            # Get the main content of the message
+            data = update["callback_query"]["data"]
+
+        # Check if its a command update
+        elif "message" in update:
+            # Get the message property
+            message = update["message"]
+            # Get the main content of the message
+            data = message["text"]
+
+        else:
+            pass
+
         # Get the chat_id from which the text was received
         chat_id = str(message["chat"]["id"])
-        # Get the command out of the text.
+        # Get the command out of the data.
         # In telegram groups the command includes bot name after '@'
-        command = text.split("@")[0][1:]
+        command = data.split("@")[0][1:]
 
         # Check if it is a valid command
         if command in ALGOTRADE_COMMANDS:
@@ -311,7 +353,7 @@ def algo_trader_bot():
             response = ALGOTRADE_COMMANDS[command](chat_id)
         else:
             # Handle invalid command
-            response = handle_invalid_telegram_command()
+            response = telegram_invalid_command()
 
         # Telegram if response is not empty
         if response:
@@ -367,16 +409,17 @@ def handle_order_updates():
         message = request.get_json()
         send_telegram(
             get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
-            "message:" + str(message),
+            format_telegram(str(message)),
         )
 
     except Exception as err:
         send_telegram(
-            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID), str(err)
+            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
+            "handle_order_updates()%0A" + str(err),
         )
         return jsonify({"ERROR!": str(err)})
 
-    return jsonify({"success": "postback", "response": "will work"})
+    return jsonify({"postback": "success"})
 
 
 @app.route("/kite/login", methods=["GET"])
