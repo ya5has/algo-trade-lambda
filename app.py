@@ -1,15 +1,14 @@
 from flask import Flask, jsonify, request
 from kiteconnect import KiteConnect
 from datetime import datetime
+import telegram
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 import boto3
 import base64
 import json
 import pytz
-import requests
 
 # import logging
-
 # logging.basicConfig(level=logging.DEBUG)
 
 # Zerodha Constants
@@ -24,7 +23,6 @@ BASE_URL = {
     "SIGNAL": "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN),
     "ALGOTRADE": "https://api.telegram.org/bot{}".format(ALGOTRADE_BOT_TOKEN),
 }
-ALGOBOT = Bot(ALGOTRADE_BOT_TOKEN)
 
 # App Constants
 IST = pytz.timezone("Asia/Kolkata")
@@ -48,6 +46,9 @@ dynamodb = boto3.resource("dynamodb")
 token_table = dynamodb.Table("kite-access-token-table")
 # Initialize kite object
 kite = KiteConnect(api_key=KITE_API_KEY)
+# Telegram bots
+algobot = Bot(ALGOTRADE_BOT_TOKEN)
+signalbot = Bot(SIGNAL_BOT_TOKEN)
 
 
 def get_date():
@@ -55,25 +56,6 @@ def get_date():
     Returns today's date in isoformat
     """
     return datetime.now(IST).strftime("%Y-%m-%d")
-
-
-def update_token_table(_access_token):
-    """
-    Update Token Table with new access tokens
-    """
-    # Get current date
-    date = get_date()
-
-    try:
-        token_table.put_item(
-            Item={"date_stamp": date, "access_token": _access_token}
-        )
-
-    except Exception:
-        return "Error: Token table update failed"
-
-    else:
-        return "Token table update success"
 
 
 def get_access_token():
@@ -97,40 +79,23 @@ def get_access_token():
         return response["Item"]["access_token"]
 
 
-def get_bot_send_url(_bot, _chat_id, _markdown=False):
+def update_token_table(_access_token):
     """
-    Returns telegram bot send message url
-    Input parameters: Bot name, chat_id, markdown format
+    Update Token Table with new access tokens
     """
-    if not _markdown:
-        return BASE_URL[_bot] + "/sendMessage?chat_id=" + _chat_id + "&text="
-    else:
-        return (
-            BASE_URL[_bot]
-            + "/sendMessage?chat_id="
-            + _chat_id
-            + "&parse_mode=markdown&text="
+    # Get current date
+    date = get_date()
+
+    try:
+        token_table.put_item(
+            Item={"date_stamp": date, "access_token": _access_token}
         )
 
+    except Exception:
+        return "Error: Token table update failed"
 
-def format_telegram(_message):
-    """
-    formats json to readable telegram message
-    """
-    return (
-        _message.replace(", '", "%0A'")
-        .replace("{", "")
-        .replace("}", "")
-        .replace("'", "")
-    )
-
-
-def send_telegram(_url, _message):
-    """
-    Sends telegram given url and message
-    """
-    requests.get(_url + str(_message))
-    return
+    else:
+        return "Token table update success"
 
 
 def get_bo_trade_details(_trade_signal):
@@ -160,9 +125,8 @@ def execute_auto_trade(_trade_signal):
     Returns:
         autotrade status: type String
     """
-    send_telegram(
-        get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
-        "Autotrade request received",
+    algobot.send_message(
+        chat_id=TESTING_GROUP_ID, text="Autotrade request received"
     )
     try:
         # Get Access token from the DB
@@ -207,6 +171,18 @@ def execute_auto_trade(_trade_signal):
         return "*Autotrade placed*%0AOrder ID: " + str(order_id)
 
 
+def telegram_format(_message):
+    """
+    formats json to readable telegram message
+    """
+    return (
+        _message.replace(", '", "\n'")
+        .replace("{", "")
+        .replace("}", "")
+        .replace("'", "")
+    )
+
+
 def telegram_kite_orders(_chat_id):
     """
     Returns the list of all orders (open and executed) for the day
@@ -231,9 +207,9 @@ def telegram_kite_orders(_chat_id):
         if orders:
             # Send last 3 orders
             for order in orders[-3:]:
-                send_telegram(
-                    get_bot_send_url("ALGOTRADE", _chat_id),
-                    format_telegram(
+                algobot.send_message(
+                    chat_id=_chat_id,
+                    text=telegram_format(
                         str({key: order[key] for key in REQUIRED_KEYS})
                     ),
                 )
@@ -266,9 +242,9 @@ def telegram_kite_trades(_chat_id):
         if trades:
             # Send last 3 trades
             for trade in trades[-3:]:
-                send_telegram(
-                    get_bot_send_url("ALGOTRADE", _chat_id),
-                    format_telegram(
+                algobot.send_message(
+                    chat_id=_chat_id,
+                    text=telegram_format(
                         str({key: trade[key] for key in REQUIRED_KEYS})
                     ),
                 )
@@ -286,7 +262,7 @@ def telegram_test_command(_chat_id):
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    ALGOBOT.send_message(
+    algobot.send_message(
         chat_id=_chat_id, text="is it working?", reply_markup=reply_markup
     )
     return
@@ -300,7 +276,7 @@ def telegram_invalid_command():
 
 
 # Telegram Bot Commands
-ALGOTRADE_COMMANDS = {
+ALGOBOT_COMMANDS = {
     "orders": telegram_kite_orders,
     "trades": telegram_kite_trades,
     "test": telegram_test_command,
@@ -339,7 +315,9 @@ def algo_trader_bot():
             data = message["text"]
 
         else:
-            pass
+            return jsonify(
+                {"ERROR!": "Not a callback_query nor a message update"}
+            )
 
         # Get the chat_id from which the text was received
         chat_id = str(message["chat"]["id"])
@@ -348,16 +326,16 @@ def algo_trader_bot():
         command = data.split("@")[0][1:]
 
         # Check if it is a valid command
-        if command in ALGOTRADE_COMMANDS:
+        if command in ALGOBOT_COMMANDS:
             # Execute the command
-            response = ALGOTRADE_COMMANDS[command](chat_id)
+            response = ALGOBOT_COMMANDS[command](chat_id)
         else:
             # Handle invalid command
             response = telegram_invalid_command()
 
         # Telegram if response is not empty
         if response:
-            send_telegram(get_bot_send_url("ALGOTRADE", chat_id), response)
+            algobot.send_message(chat_id=chat_id, text=response)
 
     except Exception as err:
         return jsonify({"ERROR!": str(err)})
@@ -378,21 +356,22 @@ def get_signal_encoded(encoded_data):
         trade_signal = json.loads(decoded_data)
 
         # Send telegram
-        send_telegram(
-            get_bot_send_url("SIGNAL", TESTING_GROUP_ID),
-            format_telegram(str(trade_signal)),
+        signalbot.send_message(
+            chat_id=TESTING_GROUP_ID, text=telegram_format(str(trade_signal))
         )
 
         # Check if Auto Trade parameter is enabled
         if trade_signal["autotrade"]:
             response = execute_auto_trade(trade_signal)
-            send_telegram(
-                get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID, True), response
+            algobot.send_message(
+                chat_id=TESTING_GROUP_ID,
+                text=response,
+                parse_mode=telegram.ParseMode.MARKDOWN,
             )
 
     except Exception as err:
-        send_telegram(
-            get_bot_send_url("SIGNAL", TESTING_GROUP_ID), "Error: " + str(err)
+        signalbot.send_message(
+            chat_id=TESTING_GROUP_ID, text="Error: " + str(err)
         )
         return jsonify({"ERROR": str(err)})
 
@@ -407,15 +386,14 @@ def handle_order_updates():
     try:
         # Capture message from post api call from kite
         message = request.get_json()
-        send_telegram(
-            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
-            format_telegram(str(message)),
+        algobot.send_message(
+            chat_id=TESTING_GROUP_ID, text=telegram_format(str(message))
         )
 
     except Exception as err:
-        send_telegram(
-            get_bot_send_url("ALGOTRADE", TESTING_GROUP_ID),
-            "handle_order_updates()%0A" + str(err),
+        algobot.send_message(
+            chat_id=TESTING_GROUP_ID,
+            text="handle_order_updates()%0A" + str(err),
         )
         return jsonify({"ERROR!": str(err)})
 
