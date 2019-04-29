@@ -291,8 +291,8 @@ def hello():
     return jsonify({"server": "Aws lambda", "status": "Working"})
 
 
-@app.route("/telegram/algo_trade", methods=["POST"])
-def algo_trader_bot():
+@app.route("/telegram/algobot", methods=["POST"])
+def handle_algobot_commands():
     """
     Main bot server for algo trader
     """
@@ -344,7 +344,7 @@ def algo_trader_bot():
 
 
 @app.route("/signal/<string:encoded_data>", methods=["GET"])
-def get_signal_encoded(encoded_data):
+def handle_encoded_signal(encoded_data):
     """
     handles encoded signals from amibroker
     and sends telegram notification
@@ -378,7 +378,7 @@ def get_signal_encoded(encoded_data):
     return jsonify({"status": True, "trade_signal": trade_signal})
 
 
-@app.route("/kite/orders", methods=["POST"])
+@app.route("/kite/order_updates", methods=["POST"])
 def handle_order_updates():
     """
     Receives postback updates from kite. Send updates to telegram
@@ -401,7 +401,7 @@ def handle_order_updates():
 
 
 @app.route("/kite/login", methods=["GET"])
-def handle_request_token():
+def handle_kite_login():
     """
     Updates Kite Connect access token using obtained request token
     """
