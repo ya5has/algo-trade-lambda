@@ -1,14 +1,15 @@
 from flask import Flask, jsonify, request
 from kiteconnect import KiteConnect
 from datetime import datetime
-import telegram
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+import telegram
 import boto3
 import base64
 import json
 import pytz
 
 # import logging
+
 # logging.basicConfig(level=logging.DEBUG)
 
 # Zerodha Constants
@@ -98,77 +99,10 @@ def update_token_table(_access_token):
         return "Token table update success"
 
 
-def get_bo_trade_details(_trade_signal):
-    """
-    Returns price, sqaureoff and target for the bracket order
-    """
-    price = float(_trade_signal["price"])
-    # target = round((_trade_signal['target'] * 100 / price), 1)
-    # stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
-    squareoff = round((float(_trade_signal["target"]) - price), 1)
-    stoploss = round((price - float(_trade_signal["stoploss"])), 1)
-
-    # Check if it's a BUY call
-    if _trade_signal["call"] == "buy":
-        # Buy call: return as it is
-        return price, squareoff, stoploss
-    else:
-        # Sell call: convert to positive values
-        return price, squareoff * -1, stoploss * -1
-
-
-def execute_auto_trade(_trade_signal):
-    """
-    Places order on zerodha
-    Args:
-        _trade_signal: type Dictionary
-    Returns:
-        autotrade status: type String
-    """
-    algobot.send_message(
-        chat_id=TESTING_GROUP_ID, text="Autotrade request received"
-    )
-    try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "*Autotrade error:*%0AGetting access token failed"
-
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
-
-        # Change SHORT to SELL
-        if _trade_signal["call"] == "short":
-            _trade_signal["call"] = "sell"
-
-        price, squareoff, stoploss = get_bo_trade_details(_trade_signal)
-
-    except Exception:
-        return "*Autotrade Error:*%0AInvalid access token or network error"
-
-    try:
-        order_id = kite.place_order(
-            variety=kite.VARIETY_BO,
-            product=kite.PRODUCT_MIS,
-            order_type=kite.ORDER_TYPE_LIMIT,
-            exchange=kite.EXCHANGE_NSE,
-            transaction_type=_trade_signal["call"].upper(),
-            tradingsymbol=_trade_signal["stock"],
-            quantity=int(_trade_signal["quantity"]),
-            price=price,
-            squareoff=squareoff,
-            stoploss=stoploss,
-        )
-
-        if not order_id:
-            return "*Error: Empty order id*%0ACheck trade signal"
-
-    except Exception as e:
-        return "*Error: Order placement failed*%0A" + str(e)
-
-    else:
-        return "*Autotrade placed*%0AOrder ID: " + str(order_id)
+def telegram_reply_markup(_text, _callback_data):
+    keyboard = [[InlineKeyboardButton(_text, callback_data=_callback_data)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return reply_markup
 
 
 def telegram_format(_message):
@@ -253,6 +187,41 @@ def telegram_kite_trades(_chat_id):
             return "No trades today"
 
 
+def telegram_kite_order_detail(_chat_id, _order_id="123456789"):
+    """
+    Returns the details of executed order
+    """
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+
+        # Get all trades
+        order_history = kite.order_history(_order_id)
+
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
+
+    else:
+        # Check if order_history is non empty
+        if order_history:
+            # Send telegram
+            algobot.send_message(
+                chat_id=_chat_id,
+                text=telegram_format(
+                    str({key: order_history[-1][key] for key in REQUIRED_KEYS})
+                ),
+            )
+            return 0
+        else:
+            return "Getting order details failed"
+
+
 def telegram_test_command(_chat_id):
 
     keyboard = [
@@ -275,10 +244,92 @@ def telegram_invalid_command():
     return "Inavalid Command! Please try again"
 
 
+def get_bo_trade_details(_trade_signal):
+    """
+    Returns price, sqaureoff and target for the bracket order
+    """
+    price = float(_trade_signal["price"])
+    # target = round((_trade_signal['target'] * 100 / price), 1)
+    # stoploss = round((_trade_signal['stoploss'] * 100 / price), 1)
+    squareoff = round((float(_trade_signal["target"]) - price), 1)
+    stoploss = round((price - float(_trade_signal["stoploss"])), 1)
+
+    # Check if it's a BUY call
+    if _trade_signal["call"] == "buy":
+        # Buy call: return as it is
+        return price, squareoff, stoploss
+    else:
+        # Sell call: convert to positive values
+        return price, squareoff * -1, stoploss * -1
+
+
+def execute_auto_trade(_trade_signal):
+    """
+    Places order on zerodha
+    Args:
+        _trade_signal: type Dictionary
+    Returns:
+        autotrade status: type String
+    """
+    algobot.send_message(
+        chat_id=TESTING_GROUP_ID, text="Autotrade request received"
+    )
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "*Autotrade error:*\nGetting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+
+        # Change SHORT to SELL
+        if _trade_signal["call"] == "short":
+            _trade_signal["call"] = "sell"
+
+        price, squareoff, stoploss = get_bo_trade_details(_trade_signal)
+
+    except Exception:
+        return "*Autotrade Error:*\nInvalid access token or network error"
+
+    try:
+        order_id = kite.place_order(
+            variety=kite.VARIETY_BO,
+            product=kite.PRODUCT_MIS,
+            order_type=kite.ORDER_TYPE_LIMIT,
+            exchange=kite.EXCHANGE_NSE,
+            transaction_type=_trade_signal["call"].upper(),
+            tradingsymbol=_trade_signal["stock"],
+            quantity=int(_trade_signal["quantity"]),
+            price=price,
+            squareoff=squareoff,
+            stoploss=stoploss,
+        )
+
+        if not order_id:
+            return "*Error: Empty order id*\nCheck trade signal"
+
+    except Exception as err:
+        return "*Error: Order placement failed*\n" + str(err)
+
+    else:
+        reply_markup = telegram_reply_markup(
+            _text="Get more order details", _callback_data="/order_detail"
+        )
+        algobot.send_message(
+            chat_id=TESTING_GROUP_ID,
+            text=str(order_id),
+            reply_markup=reply_markup,
+        )
+        return 0
+
+
 # Telegram Bot Commands
 ALGOBOT_COMMANDS = {
     "orders": telegram_kite_orders,
     "trades": telegram_kite_trades,
+    "order_detail": telegram_kite_order_detail,
     "test": telegram_test_command,
 }
 
@@ -306,6 +357,8 @@ def handle_algobot_commands():
             message = update["callback_query"]["message"]
             # Get the main content of the message
             data = update["callback_query"]["data"]
+            # Get the text of the message
+            text = message["text"]
 
         # Check if its a command update
         elif "message" in update:
@@ -313,6 +366,7 @@ def handle_algobot_commands():
             message = update["message"]
             # Get the main content of the message
             data = message["text"]
+            text = None
 
         else:
             return jsonify(
@@ -328,7 +382,10 @@ def handle_algobot_commands():
         # Check if it is a valid command
         if command in ALGOBOT_COMMANDS:
             # Execute the command
-            response = ALGOBOT_COMMANDS[command](chat_id)
+            if command == "order_detail" and text:
+                response = ALGOBOT_COMMANDS[command](chat_id, text)
+            else:
+                response = ALGOBOT_COMMANDS[command](chat_id)
         else:
             # Handle invalid command
             response = telegram_invalid_command()
@@ -363,11 +420,12 @@ def handle_encoded_signal(encoded_data):
         # Check if Auto Trade parameter is enabled
         if trade_signal["autotrade"]:
             response = execute_auto_trade(trade_signal)
-            algobot.send_message(
-                chat_id=TESTING_GROUP_ID,
-                text=response,
-                parse_mode=telegram.ParseMode.MARKDOWN,
-            )
+            if response:
+                algobot.send_message(
+                    chat_id=TESTING_GROUP_ID,
+                    text=response,
+                    parse_mode=telegram.ParseMode.MARKDOWN,
+                )
 
     except Exception as err:
         signalbot.send_message(
@@ -386,14 +444,15 @@ def handle_order_updates():
     try:
         # Capture message from post api call from kite
         message = request.get_json()
-        algobot.send_message(
-            chat_id=TESTING_GROUP_ID, text=telegram_format(str(message))
-        )
+        if message:
+            algobot.send_message(
+                chat_id=TESTING_GROUP_ID, text=telegram_format(str(message))
+            )
 
     except Exception as err:
         algobot.send_message(
             chat_id=TESTING_GROUP_ID,
-            text="handle_order_updates()%0A" + str(err),
+            text="handle_order_updates()\n" + str(err),
         )
         return jsonify({"ERROR!": str(err)})
 
