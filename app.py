@@ -99,13 +99,7 @@ def update_token_table(_access_token):
         return "Token table update success"
 
 
-def telegram_reply_markup(_text, _callback_data):
-    keyboard = [[InlineKeyboardButton(_text, callback_data=_callback_data)]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    return reply_markup
-
-
-def telegram_format(_message):
+def tel_format(_message):
     """
     formats json to readable telegram message
     """
@@ -117,7 +111,16 @@ def telegram_format(_message):
     )
 
 
-def telegram_kite_orders(_chat_id):
+def tel_reply_markup(_text, _callback_data):
+    """
+    Returns inline keyboard markup
+    """
+    keyboard = [[InlineKeyboardButton(_text, callback_data=_callback_data)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    return reply_markup
+
+
+def tel_kite_orders(_chat_id):
     """
     Returns the list of all orders (open and executed) for the day
     """
@@ -143,7 +146,7 @@ def telegram_kite_orders(_chat_id):
             for order in orders[-3:]:
                 algobot.send_message(
                     chat_id=_chat_id,
-                    text=telegram_format(
+                    text=tel_format(
                         str({key: order[key] for key in REQUIRED_KEYS})
                     ),
                 )
@@ -152,7 +155,7 @@ def telegram_kite_orders(_chat_id):
             return "No orders today"
 
 
-def telegram_kite_trades(_chat_id):
+def tel_kite_trades(_chat_id):
     """
     Returns the list of all executed trades for the day
     """
@@ -178,7 +181,7 @@ def telegram_kite_trades(_chat_id):
             for trade in trades[-3:]:
                 algobot.send_message(
                     chat_id=_chat_id,
-                    text=telegram_format(
+                    text=tel_format(
                         str({key: trade[key] for key in REQUIRED_KEYS})
                     ),
                 )
@@ -187,7 +190,7 @@ def telegram_kite_trades(_chat_id):
             return "No trades today"
 
 
-def telegram_kite_order_detail(_chat_id, _order_id="123456789"):
+def tel_kite_order_detail(_chat_id, _order_id="123456789"):
     """
     Returns the details of executed order
     """
@@ -213,7 +216,7 @@ def telegram_kite_order_detail(_chat_id, _order_id="123456789"):
             # Send telegram
             algobot.send_message(
                 chat_id=_chat_id,
-                text=telegram_format(
+                text=tel_format(
                     str({key: order_history[-1][key] for key in REQUIRED_KEYS})
                 ),
             )
@@ -222,7 +225,34 @@ def telegram_kite_order_detail(_chat_id, _order_id="123456789"):
             return "Getting order details failed"
 
 
-def telegram_test_command(_chat_id):
+def tel_kite_account_detail(_chat_id):
+    """
+    Returns the account detail of linked kite account
+    """
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get kite profile
+        profile = kite.profile()
+
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
+
+    else:
+        # All keys: user_type, email, user_name, user_shortname, broker,
+        # ...exchanges, products, order_types, avatar_url
+        # List required keys
+        required_keys = ["user_name", "email"]
+        return tel_format(str({key: profile[key] for key in required_keys}))
+
+
+def tel_test_command(_chat_id):
 
     keyboard = [
         [
@@ -237,7 +267,7 @@ def telegram_test_command(_chat_id):
     return
 
 
-def telegram_invalid_command():
+def tel_invalid_command():
     """
     handles invalid commands given to telegram bot
     """
@@ -314,7 +344,7 @@ def execute_auto_trade(_trade_signal):
         return "*Error: Order placement failed*\n" + str(err)
 
     else:
-        reply_markup = telegram_reply_markup(
+        reply_markup = tel_reply_markup(
             _text="Get more order details", _callback_data="/order_detail"
         )
         algobot.send_message(
@@ -327,10 +357,11 @@ def execute_auto_trade(_trade_signal):
 
 # Telegram Bot Commands
 ALGOBOT_COMMANDS = {
-    "orders": telegram_kite_orders,
-    "trades": telegram_kite_trades,
-    "order_detail": telegram_kite_order_detail,
-    "test": telegram_test_command,
+    "orders": tel_kite_orders,
+    "trades": tel_kite_trades,
+    "order_detail": tel_kite_order_detail,
+    "account": tel_kite_account_detail,
+    "test": tel_test_command,
 }
 
 # API Routes
@@ -388,11 +419,14 @@ def handle_algobot_commands():
                 response = ALGOBOT_COMMANDS[command](chat_id)
         else:
             # Handle invalid command
-            response = telegram_invalid_command()
+            response = tel_invalid_command()
 
         # Telegram if response is not empty
         if response:
-            algobot.send_message(chat_id=chat_id, text=response)
+            algobot.send_message(
+                chat_id=chat_id,
+                text=response,
+            )
 
     except Exception as err:
         return jsonify({"ERROR!": str(err)})
@@ -414,7 +448,7 @@ def handle_encoded_signal(encoded_data):
 
         # Send telegram
         signalbot.send_message(
-            chat_id=TESTING_GROUP_ID, text=telegram_format(str(trade_signal))
+            chat_id=TESTING_GROUP_ID, text=tel_format(str(trade_signal))
         )
 
         # Check if Auto Trade parameter is enabled
@@ -444,9 +478,12 @@ def handle_order_updates():
     try:
         # Capture message from post api call from kite
         message = request.get_json()
+        # Check if the message is not None
         if message:
             algobot.send_message(
-                chat_id=TESTING_GROUP_ID, text=telegram_format(str(message))
+                chat_id=TESTING_GROUP_ID,
+                text="*Order Update*\n" + tel_format(str(message)),
+                parse_mode=telegram.ParseMode.MARKDOWN,
             )
 
     except Exception as err:
