@@ -190,6 +190,47 @@ def tel_kite_trades(_chat_id):
             return "No trades today"
 
 
+def tel_kite_positions(_chat_id):
+    """
+    Returns the list of all current positions
+    """
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get status of all current positions
+        positions = kite.positions()["net"]
+
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
+
+    else:
+        # Check if position list is non empty
+        if positions:
+            # Construct message and send all positions
+            for position in positions:
+                quantity = position["quantity"]
+                symbol = position["tradingsymbol"]
+                average_price = positions["averageprice"]
+                pnl = positions["pnl"]
+                algobot.send_message(
+                    chat_id=_chat_id,
+                    text="*{}* shares of *{}* at *{}* each."
+                    "Current PnL at *{}*".format(
+                        quantity, symbol, average_price, pnl
+                    ),
+                    markdown=telegram.ParseMode.MARKDOWN,
+                )
+            return 0
+        else:
+            return "No open positions"
+
+
 def tel_kite_order_detail(_chat_id, _order_id="123456789"):
     """
     Returns the details of executed order
@@ -387,6 +428,7 @@ def execute_auto_trade(_trade_signal):
 ALGOBOT_COMMANDS = {
     "orders": tel_kite_orders,
     "trades": tel_kite_trades,
+    "positions": tel_kite_positions,
     "order_detail": tel_kite_order_detail,
     "account": tel_kite_account_detail,
     "margin": tel_kite_account_margin,
@@ -452,10 +494,7 @@ def handle_algobot_commands():
 
         # Telegram if response is not empty
         if response:
-            algobot.send_message(
-                chat_id=chat_id,
-                text=response,
-            )
+            algobot.send_message(chat_id=chat_id, text=response)
 
     except Exception as err:
         return jsonify({"ERROR!": str(err)})
