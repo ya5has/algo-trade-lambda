@@ -252,6 +252,34 @@ def tel_kite_account_detail(_chat_id):
         return tel_format(str({key: profile[key] for key in required_keys}))
 
 
+def tel_kite_account_margin(_chat_id):
+    """
+    Returns the linked account margins
+    """
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return "Error: Getting access token failed"
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+        # Get kite account margin for diferent segments
+        margin = kite.margins()
+
+    except Exception:
+        return "Error: Invalid access token or network error. Try again"
+
+    else:
+        # All keys: user_type, email, user_name, user_shortname, broker,
+        # ...exchanges, products, order_types, avatar_url
+        # List required keys
+        # required_keys = ["user_name", "email"]
+        # return "tel_format(str({key: profile[key] for key in required_keys}))
+        return tel_format(str(margin))
+
+
 def tel_test_command(_chat_id):
 
     keyboard = [
@@ -361,6 +389,7 @@ ALGOBOT_COMMANDS = {
     "trades": tel_kite_trades,
     "order_detail": tel_kite_order_detail,
     "account": tel_kite_account_detail,
+    "margin": tel_kite_account_margin,
     "test": tel_test_command,
 }
 
