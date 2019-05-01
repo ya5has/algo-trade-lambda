@@ -99,6 +99,30 @@ def update_token_table(_access_token):
         return "Token table update success"
 
 
+def kite_setup():
+    """
+    Setup kite object with the access token
+    """
+    try:
+        # Get Access token from the DB
+        access_token = get_access_token()
+        # Check if the query is successful
+        if not access_token:
+            return {
+                "status": 0,
+                "message": "Error: Getting access token failed",
+            }
+
+        # Set access token in the kite object
+        kite.set_access_token(access_token)
+
+    except Exception:
+        return {"status": 0, "message": "Error: Network error. Try again"}
+
+    else:
+        return {"status": 1, "message": "Kite setup complete"}
+
+
 def tel_format(_message):
     """
     formats json to readable telegram message
@@ -271,19 +295,15 @@ def tel_kite_account_detail(_chat_id):
     Returns the account detail of linked kite account
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
+        setup = kite_setup()
+        if setup["status"] == 0:
+            return setup["message"]
 
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
         # Get kite profile
         profile = kite.profile()
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
         # All keys: user_type, email, user_name, user_shortname, broker,
