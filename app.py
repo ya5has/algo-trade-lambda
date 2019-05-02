@@ -149,19 +149,17 @@ def tel_kite_orders(_chat_id):
     Returns the list of all orders (open and executed) for the day
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
         # Get all orders
         orders = kite.orders()
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
         # Check if orders list is non empty
@@ -184,19 +182,17 @@ def tel_kite_trades(_chat_id):
     Returns the list of all executed trades for the day
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
         # Get all trades
         trades = kite.trades()
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
         # Check if trades list is non empty
@@ -219,19 +215,17 @@ def tel_kite_positions(_chat_id):
     Returns the list of all current positions
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
         # Get status of all current positions
         positions = kite.positions()["net"]
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
         # Check if position list is non empty
@@ -260,20 +254,17 @@ def tel_kite_order_detail(_chat_id, _order_id="123456789"):
     Returns the details of executed order
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
-
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
         # Get all trades
         order_history = kite.order_history(_order_id)
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
         # Check if order_history is non empty
@@ -409,14 +400,11 @@ def execute_auto_trade(_trade_signal):
         chat_id=TESTING_GROUP_ID, text="Autotrade request received"
     )
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "*Autotrade error:*\nGetting access token failed"
-
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
         # Change SHORT to SELL
         if _trade_signal["call"] == "short":
