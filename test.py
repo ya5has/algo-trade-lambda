@@ -4,7 +4,9 @@ stoploss = float("546.6285")
 squareoff = round((target - price), 1)
 stoploss = round((price - stoploss), 1)
 
-print(stoploss, squareoff, price)
+x = [1, 2]
+
+print("yuyu{}{}".format(*x))
 """
 SIGNAL_BOT_URL = "https://api.telegram.org/bot{}".format(SIGNAL_BOT_TOKEN)
 SIGNAL_BOT_SEND_URL = (

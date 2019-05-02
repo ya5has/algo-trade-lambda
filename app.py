@@ -292,10 +292,12 @@ def tel_kite_order_detail(_chat_id, _order_id="123456789"):
 
 def tel_kite_account_detail(_chat_id):
     """
-    Returns the account detail of linked kite account
+    Returns the details of linked kite account
     """
     try:
+        # Call kite setup
         setup = kite_setup()
+        # Check if there's an error
         if setup["status"] == 0:
             return setup["message"]
 
@@ -307,7 +309,7 @@ def tel_kite_account_detail(_chat_id):
 
     else:
         # All keys: user_type, email, user_name, user_shortname, broker,
-        # ...exchanges, products, order_types, avatar_url
+        # ....exchanges, products, order_types, avatar_url
         # List required keys
         required_keys = ["user_name", "email"]
         return tel_format(str({key: profile[key] for key in required_keys}))
@@ -315,30 +317,43 @@ def tel_kite_account_detail(_chat_id):
 
 def tel_kite_account_margin(_chat_id):
     """
-    Returns the linked account margins
+    Returns the margins of linked kite account
     """
     try:
-        # Get Access token from the DB
-        access_token = get_access_token()
-        # Check if the query is successful
-        if not access_token:
-            return "Error: Getting access token failed"
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
 
-        # Set access token in the kite object
-        kite.set_access_token(access_token)
-        # Get kite account margin for diferent segments
-        margin = kite.margins()
+        # Get kite account margin for equity segments
+        margin = kite.margins(segment="equity")
+        avail = margin["available"]
+        util = margin["utilised"]
 
     except Exception:
-        return "Error: Invalid access token or network error. Try again"
+        return "Error: Invalid access token. Try logging in again"
 
     else:
-        # All keys: user_type, email, user_name, user_shortname, broker,
-        # ...exchanges, products, order_types, avatar_url
-        # List required keys
-        # required_keys = ["user_name", "email"]
-        # return "tel_format(str({key: profile[key] for key in required_keys}))
-        return tel_format(str(margin))
+        # available keys: adhoc_margin, cash, collateral, intraday_payin
+        # utlized keys: debits, exposure, m2m_realised, m2m_unrealised, payout
+        # ....option_premium, span, holding_sales, turnover
+        # Build response json
+        margin_response = {
+            "net": margin["net"],
+            "available": {
+                "adhoc_margin": avail["adhoc_margin"],
+                "cash": avail["cash"],
+                "collateral": avail["collateral"],
+                "intraday_payin": avail["intraday_payin"],
+            },
+            "utilised": {
+                "debits": util["debits"],
+                "exposure": util["exposure"],
+            },
+        }
+
+        return tel_format(str(margin_response))
 
 
 def tel_test_command(_chat_id):
