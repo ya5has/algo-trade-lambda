@@ -410,12 +410,10 @@ def execute_auto_trade(_trade_signal):
         if _trade_signal["call"] == "short":
             _trade_signal["call"] = "sell"
 
+        # Get details for bracket order
         price, squareoff, stoploss = get_bo_trade_details(_trade_signal)
 
-    except Exception:
-        return "*Autotrade Error:*\nInvalid access token or network error"
-
-    try:
+        # Place order
         order_id = kite.place_order(
             variety=kite.VARIETY_BO,
             product=kite.PRODUCT_MIS,
@@ -429,6 +427,7 @@ def execute_auto_trade(_trade_signal):
             stoploss=stoploss,
         )
 
+        # Check if order id is empty
         if not order_id:
             return "*Error: Empty order id*\nCheck trade signal"
 
