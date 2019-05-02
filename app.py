@@ -281,32 +281,7 @@ def tel_kite_order_detail(_chat_id, _order_id="123456789"):
             return "Getting order details failed"
 
 
-def tel_kite_account_detail(_chat_id):
-    """
-    Returns the details of linked kite account
-    """
-    try:
-        # Call kite setup
-        setup = kite_setup()
-        # Check if there's an error
-        if setup["status"] == 0:
-            return setup["message"]
-
-        # Get kite profile
-        profile = kite.profile()
-
-    except Exception:
-        return "Error: Invalid access token. Try logging in again"
-
-    else:
-        # All keys: user_type, email, user_name, user_shortname, broker,
-        # ....exchanges, products, order_types, avatar_url
-        # List required keys
-        required_keys = ["user_name", "email"]
-        return tel_format(str({key: profile[key] for key in required_keys}))
-
-
-def tel_kite_account_margin(_chat_id):
+def tel_kite_margin_detail(_chat_id):
     """
     Returns the margins of linked kite account
     """
@@ -345,6 +320,44 @@ def tel_kite_account_margin(_chat_id):
         }
 
         return tel_format(str(margin_response))
+
+
+def tel_kite_account_detail(_chat_id):
+    """
+    Returns the details of linked kite account
+    """
+    try:
+        # Call kite setup
+        setup = kite_setup()
+        # Check if there's an error
+        if setup["status"] == 0:
+            return setup["message"]
+
+        # Get kite profile
+        profile = kite.profile()
+
+    except Exception:
+        return "Error: Invalid access token. Try logging in again"
+
+    else:
+        # All keys: user_type, email, user_name, user_shortname, broker,
+        # ....exchanges, products, order_types, avatar_url
+        # List required keys
+        required_keys = ["user_name", "email"]
+        return tel_format(str({key: profile[key] for key in required_keys}))
+
+
+def tel_kite_login_url(_chat_id):
+    """
+    Returns login url to update access token
+    """
+    algobot.send_message(
+        chat_id=_chat_id,
+        text="[ClickHereToLoginToKite]({})".format(kite.login_url()),
+        parse_mode=telegram.ParseMode.MARKDOWN,
+        disable_web_page_preview=True,
+    )
+    return 0
 
 
 def tel_test_command(_chat_id):
@@ -453,7 +466,8 @@ ALGOBOT_COMMANDS = {
     "positions": tel_kite_positions,
     "order_detail": tel_kite_order_detail,
     "account": tel_kite_account_detail,
-    "margin": tel_kite_account_margin,
+    "margin": tel_kite_margin_detail,
+    "login": tel_kite_login_url,
     "test": tel_test_command,
 }
 
