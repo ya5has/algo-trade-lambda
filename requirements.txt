@@ -48,7 +48,7 @@ python-dateutil==2.6.1
 python-slugify==1.2.4
 python-telegram-bot==11.1.0
 pytz==2019.1
-PyYAML==5.1
+PyYAML==5.4
 requests==2.21.0
 s3transfer==0.2.0
 service-identity==18.1.0
