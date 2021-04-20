@@ -3,7 +3,7 @@ argcomplete==1.9.3
 asn1crypto==0.24.0
 astroid==2.2.5
 attrs==19.1.0
-autobahn==19.3.3
+autobahn==20.12.3
 Automat==0.7.0
 black==19.3b0
 boto3==1.9.134
